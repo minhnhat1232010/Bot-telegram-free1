@@ -3,7 +3,7 @@ const fetch = require('node-fetch');
 const express = require('express');
 const app = express();
 
-const BOT_TOKEN = 'YOUR_BOT_TOKEN'; // ← Thay bằng token bot thật
+const BOT_TOKEN = '8280612700:AAFiIRFMfRo2KjE9ukQ-qkkVnDIxTtRqPes'; // ← Thay bằng token bot thật
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 let latestPhien = null;
