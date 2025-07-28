@@ -3,11 +3,11 @@ const fetch = require('node-fetch');
 const express = require('express');
 const app = express();
 
-const BOT_TOKEN = '8280612700:AAFiIRFMfRo2KjE9ukQ-qkkVnDIxTtRqPes'; // ← Thay bằng token bot thật
+const BOT_TOKEN = '8280612700:AAFiIRFMfRo2KjE9ukQ-qkkVnDIxTtRqPes'; // ← Thay bằng token bot thật của bạn
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 let latestPhien = null;
-let subscribers = [];
+let subscribers = new Set(); // Dùng Set để quản lý subscribers hiệu quả hơn
 
 async function fetchData() {
   try {
@@ -36,22 +36,23 @@ function formatMessage(data) {
   const nextPhien = phien + 1;
   const time = new Date().toLocaleTimeString('vi-VN', { hour12: false });
 
+  // Sử dụng Markdown để tin nhắn đẹp mắt hơn
   return `
-🎮 SUNWIN VIP - PHÂN TÍCH CHUẨN XÁC 🎮
+🎮 *SUNWIN VIP - PHÂN TÍCH CHUẨN XÁC* 🎮
 ══════════════════════════
-🆔 Phiên: ${phien}
-🎲 Xúc xắc: [${xuc_xac_1} - ${xuc_xac_2} - ${xuc_xac_3}]
-🧮 Tổng điểm: ${tong} | Kết quả: ${ket_qua}
+🆔 *Phiên:* \`${phien}\`
+🎲 *Xúc xắc:* [\`${xuc_xac_1}\` - \`${xuc_xac_2}\` - \`${xuc_xac_3}\`]
+🧮 *Tổng điểm:* \`${tong}\` | *Kết quả:* *${ket_qua}*
 ──────────────────────────
-🔮 Dự đoán phiên ${nextPhien}: ${du_doan}
-📊 Độ tin cậy: 🔥 (${ty_le_thanh_cong}%)
-🎯 Khuyến nghị: Đặt cược ${du_doan}
+🔮 *Dự đoán phiên ${nextPhien}:* *${du_doan}*
+📊 *Độ tin cậy:* 🔥 (\`${ty_le_thanh_cong}%\`)
+🎯 *Khuyến nghị:* Đặt cược *${du_doan}*
 
-🧩 Pattern: ${pattern || 'Không phát hiện mẫu cụ thể'}
-⏱️ Thời gian: ${time}
+🧩 *Pattern:* ${pattern ? `\`${pattern}\`` : 'Không phát hiện mẫu cụ thể'}
+⏱️ *Thời gian:* \`${time}\`
 ══════════════════════════
-👥 Hệ thống phân tích Sunwin AI 👥
-💎 Uy tín - Chính xác - Hiệu quả 💎
+👥 _Hệ thống phân tích Sunwin AI_ 👥
+💎 _Uy tín - Chính xác - Hiệu quả_ 💎
 `.trim();
 }
 
@@ -63,34 +64,59 @@ async function checkNewData() {
     latestPhien = data.phien;
 
     for (const chatId of subscribers) {
-      bot.sendMessage(chatId, formatMessage(data));
+      // Gửi tin nhắn với Markdown và tùy chọn parse_mode
+      bot.sendMessage(chatId, formatMessage(data), { parse_mode: 'Markdown' });
     }
   }
 }
 
+// Chạy kiểm tra dữ liệu mỗi 5 giây
 setInterval(checkNewData, 5000);
 
 // Lệnh /start
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  bot.sendMessage(chatId, `👋 Chào bạn đến với SUNWIN AI!\nGửi /sunwin để nhận tự động dữ liệu Tài/Xỉu.\nGửi /stop để hủy.`);
+  const welcomeMessage = `
+👋 Chào bạn đến với SUNWIN AI!
+Nhấn nút bên dưới để nhận tự động dữ liệu Tài/Xỉu hoặc hủy đăng ký.
+  `.trim();
+
+  // Thêm Inline Keyboard
+  bot.sendMessage(chatId, welcomeMessage, {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '✅ Nhận dự đoán Sunwin', callback_data: 'subscribe_sunwin' }],
+        [{ text: '🚫 Hủy nhận dự đoán', callback_data: 'unsubscribe_sunwin' }]
+      ]
+    }
+  });
 });
 
-// Lệnh /sunwin: đăng ký nhận dữ liệu
-bot.onText(/\/sunwin/, (msg) => {
-  const chatId = msg.chat.id;
-  if (!subscribers.includes(chatId)) {
-    subscribers.push(chatId);
+// Xử lý Inline Keyboard callbacks
+bot.on('callback_query', (callbackQuery) => {
+  const message = callbackQuery.message;
+  const chatId = message.chat.id;
+  const data = callbackQuery.data;
+
+  if (data === 'subscribe_sunwin') {
+    if (!subscribers.has(chatId)) {
+      subscribers.add(chatId);
+      bot.sendMessage(chatId, `✅ Bạn đã đăng ký nhận dự đoán SUNWIN tự động!`);
+    } else {
+      bot.sendMessage(chatId, `Bạn đã đăng ký rồi!`);
+    }
+  } else if (data === 'unsubscribe_sunwin') {
+    if (subscribers.has(chatId)) {
+      subscribers.delete(chatId);
+      bot.sendMessage(chatId, `🚫 Bạn đã hủy nhận dự đoán SUNWIN.`);
+    } else {
+      bot.sendMessage(chatId, `Bạn chưa đăng ký nhận dự đoán.`);
+    }
   }
-  bot.sendMessage(chatId, `✅ Bạn đã đăng ký nhận dự đoán SUNWIN tự động!`);
+  // Luôn trả lời callback query để loại bỏ trạng thái loading trên nút
+  bot.answerCallbackQuery(callbackQuery.id);
 });
 
-// Lệnh /stop: hủy đăng ký
-bot.onText(/\/stop/, (msg) => {
-  const chatId = msg.chat.id;
-  subscribers = subscribers.filter(id => id !== chatId);
-  bot.sendMessage(chatId, `🚫 Bạn đã hủy nhận dự đoán SUNWIN.`);
-});
 
 // Render yêu cầu cổng để giữ bot sống
 app.get('/', (req, res) => res.send('✅ SUNWIN Bot đang chạy...'));
