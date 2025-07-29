@@ -1,9 +1,9 @@
 const TelegramBot = require('node-telegram-bot-api');
-const fetch = require('node-fetch');
 const express = require('express');
 const app = express();
 
-const BOT_TOKEN = '8280612700:AAFiIRFMfRo2KjE9ukQ-qkkVnDIxTtRqPes'; // ← Thay bằng token bot thật
+// ⚠️ Lưu ý: Không cần node-fetch nếu dùng Node.js 18 trở lên (có fetch sẵn)
+const BOT_TOKEN = process.env.BOT_TOKEN || '8280612700:AAFiIRFMfRo2KjE9ukQ-qkkVnDIxTtRqPes';
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 let latestPhien = null;
@@ -11,11 +11,11 @@ let subscribers = [];
 
 async function fetchData() {
   try {
-    const res = await fetch('https://saobody-lopq.onrender.com/api/taixiu/sunwin');
-    const data = await res.json();
+    const response = await fetch('https://saobody-lopq.onrender.com/api/taixiu/sunwin');
+    const data = await response.json();
     return data;
-  } catch (e) {
-    console.error('❌ API Error:', e);
+  } catch (error) {
+    console.error('❌ Lỗi khi lấy dữ liệu API:', error.message);
     return null;
   }
 }
@@ -57,26 +57,28 @@ function formatMessage(data) {
 
 async function checkNewData() {
   const data = await fetchData();
-  if (!data) return;
+  if (!data || !data.phien) return;
 
   if (data.phien !== latestPhien) {
     latestPhien = data.phien;
 
+    const message = formatMessage(data);
     for (const chatId of subscribers) {
-      bot.sendMessage(chatId, formatMessage(data));
+      bot.sendMessage(chatId, message);
     }
   }
 }
 
+// 🔄 Kiểm tra mỗi 5 giây
 setInterval(checkNewData, 5000);
 
-// Lệnh /start
+// 👋 /start
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  bot.sendMessage(chatId, `👋 Chào bạn đến với SUNWIN AI!\nGửi /sunwin để nhận tự động dữ liệu Tài/Xỉu.\nGửi /stop để hủy.`);
+  bot.sendMessage(chatId, `👋 Chào bạn đến với SUNWIN AI!\nGửi /sunwin để nhận dự đoán tự động.\nGửi /stop để hủy.`);
 });
 
-// Lệnh /sunwin: đăng ký nhận dữ liệu
+// ✅ /sunwin
 bot.onText(/\/sunwin/, (msg) => {
   const chatId = msg.chat.id;
   if (!subscribers.includes(chatId)) {
@@ -85,14 +87,20 @@ bot.onText(/\/sunwin/, (msg) => {
   bot.sendMessage(chatId, `✅ Bạn đã đăng ký nhận dự đoán SUNWIN tự động!`);
 });
 
-// Lệnh /stop: hủy đăng ký
+// 🚫 /stop
 bot.onText(/\/stop/, (msg) => {
   const chatId = msg.chat.id;
   subscribers = subscribers.filter(id => id !== chatId);
   bot.sendMessage(chatId, `🚫 Bạn đã hủy nhận dự đoán SUNWIN.`);
 });
 
-// Render yêu cầu cổng để giữ bot sống
-app.get('/', (req, res) => res.send('✅ SUNWIN Bot đang chạy...'));
+// 🌐 Endpoint giữ bot sống
+app.get('/', (req, res) => {
+  res.send('✅ SUNWIN BOT is running...');
+});
+
+// 🚀 Server Express để Render không tắt
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🌐 Server is running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ Server is listening on port ${PORT}`);
+});
